@@ -4,17 +4,6 @@
 #include <math.h>
 #include <float.h>
 
-typedef struct param_list {
-  int ind;
-  double *mu; //p-dimensional mean vector
-  double *cov; // p-dim covariance matrix
-  struct param_list *next;
-} param_list;
-
-typedef param_list * param_link;
-
-param_link params;
-
 double ***L;
 double **diagL;
 
@@ -23,16 +12,12 @@ int choldc(double **a, double *p, int n);
 int update_L(double *cov, int comp, int p);
 void init_params(double *Covs, int Kmax, int p);
 void free_params(int M, int p);
-double* estep_fullcov(double *posts,
-                       int n,
-                       int K,
-                       int Kmax);
+double* estep_fullcov(double *posts, int n, int K, int Kmax);
 double mstep_fullcov(double *data, int n, int p, int comp,
                      double *mu, double *cov, double *post,
                      int Kmax);
-void lshift_vec(double *vec, int comp, int n, int K);
+void lshift_vec(double *vec, int comp, int K);
 void lshift_mat(double *mat, int comp, int n, int K, int Kmax);
-param_link kill_comp(int comp, param_link pl);
 void calc_weights(double *weights, double *priors,
                   double *Mus, int *lives,
                   double *data, int n, int p, int K, int Kmax);
@@ -52,16 +37,21 @@ void mixtures(double *data, double *weights, double *Mus,
 // dmover2 : p(p+3)/2
 {
   int j, k, l, m, comp, min_m, countf;
-  int n = *pn, p = *pp, K = *pK, Kmax = *pK, Kmin = *pKmin, itmax = *pitmax, verbose = *pverbose;
+  int n = *pn, p = *pp, K = *pK, Kmax = *pK,
+    Kmin = *pKmin, itmax = *pitmax, verbose = *pverbose;
   double *posts, *mu, *cov;
   double sum, tmp, dm, n_m;
   double mindl = *pmindl, loglik;
   double dmover2 = *pdmover2, tol = *ptol;
   int k_cont, killed;
+  int *mapp, idx;
 
   //========debug=======//
   // print_debug(priors,weights,n,p,K);
   //========debug=======//
+
+  mapp = (int *)malloc(Kmax * sizeof(int));
+  for (k = 0; k < Kmax; k++) mapp[k] = k;
 
   // make variables for calculating likelihood
   init_params(Covs, Kmax, p);
@@ -73,25 +63,23 @@ void mixtures(double *data, double *weights, double *Mus,
     printf("%03d : loglik = %.4f\n", countf, logliks[0]);
   while(k_cont) {
     do {
-      comp = 0;
-      while (comp < K) {
-        if (lives[comp] == 0) {
-          comp++;
-          continue;
-        }
+      idx = 0;
+      while (idx < K) {
+        comp = mapp[idx];
 
         // load mean and covariance of "comp"th component
         mu = &Mus[comp*p];
         cov = &Covs[comp*p*p];
+
         //E-step
         posts = estep_fullcov(weights, n, K, Kmax);
         //M-step
-        n_m = mstep_fullcov(data, n, p, comp, mu, cov, posts, Kmax);
+        n_m = mstep_fullcov(data, n, p, idx, mu, cov, posts, Kmax);
 
         // when priros are small, kill its components
-        priors[comp] = (n_m - dmover2)/n;
-        if (priors[comp] < 0)
-          priors[comp] = 0.0;
+        priors[idx] = (n_m - dmover2)/n;
+        if (priors[idx] < 0)
+          priors[idx] = 0.0;
 
         sum = 0.0;
         for (m = 0; m < K; m++)
@@ -101,21 +89,22 @@ void mixtures(double *data, double *weights, double *Mus,
 
         killed = 0;
         // elliminate the dead component
-        if (priors[comp] == 0.0) {
+        if (priors[idx] == 0.0) {
           if (verbose != 0)
-            printf("K = %d, comp = %d\n", K, comp);
+            printf("K = %d, comp = %d\n", K, mapp[idx]);
 
           trans1[countf] = 1;
           killed = 1;
 
           // left shift priors and posts
-          lshift_vec(priors, comp, n, K);
-          lshift_mat(posts, comp, n, K, Kmax);
+          lshift_vec(priors, idx, K);
+          lshift_mat(posts, idx, n, K, Kmax);
 
           // weights update
           weights = posts;
 
           // off
+          for (m = idx; m < K-1; m++) mapp[m] = mapp[m+1];
           lives[comp] = 0;
 
           // done remove
@@ -124,9 +113,9 @@ void mixtures(double *data, double *weights, double *Mus,
 
         if (killed == 0) {
           calc_weights(weights, priors, Mus, lives, data, n, p, K, Kmax);
-          comp++;
+          idx++;
         }
-      } //while(comp < K)
+      } //while(idx < K)
       countf++;
 
       // calc posterior for MML
@@ -175,19 +164,14 @@ void mixtures(double *data, double *weights, double *Mus,
         fprintf(stderr, "can't find the smallest component\n");
 
       // kill the comp
-      k = 0;
-      comp = 0;
-      do {
-        k += lives[comp];
-        if (k == min_m)
-          break;
-        comp++;
-      } while(1);
+      comp = mapp[min_m];
       lives[comp] = 0;
+      for (m = min_m; m < K-1; m++) mapp[m] = mapp[m+1];
 
       // flusleft
-      lshift_vec(priors, min_m, n, K);
+      lshift_vec(priors, min_m, K);
       lshift_mat(posts, min_m, n, K, Kmax);
+
       // done delete
       K = K-1;
 
@@ -227,7 +211,7 @@ void mixtures(double *data, double *weights, double *Mus,
 
 double mvnorm(double *xi, double *mu, int index, int p)
 {
-  int i,j;
+  int i, j;
   double tmp;
   double lexp = 0.0;
   double det = 1.0;
@@ -239,7 +223,7 @@ double mvnorm(double *xi, double *mu, int index, int p)
   for (i = 0; i < p; i++) {
     tmp = 0.0;
     for (j = 0; j <= i; j++)
-      tmp += A[index][i][j] * (xi[j] - mu[j]); //L^-1 (x-mu)
+      tmp += L[index][i][j] * (xi[j] - mu[j]); //L^-1 (x-mu)
     lexp += tmp * tmp;
     det *= diagL[index][i];
   }
@@ -247,8 +231,9 @@ double mvnorm(double *xi, double *mu, int index, int p)
   return (-0.5*p*log(2*M_PI) - log(det) - 0.5*lexp);
 }
 
-int choldc(double **a, double *p, int n) {
-  int i,j,k;
+int choldc(double **a, double *p, int n)
+{
+  int i, j, k;
   double sum;
 
   for (i = 0; i < n; i++) {
@@ -431,23 +416,6 @@ void lshift_mat(double *mat, int comp, int n, int K, int Kmax)
       mat[i*Kmax + m] = mat[i*Kmax + m+1];
     mat[i*Kmax + m] = 0;
   }
-}
-
-param_link kill_comp(int comp, param_link pl)
-{
-  int m;
-  param_link pl_b;
-
-  if (comp == 0) {
-    params = pl->next;
-    return params;
-  } else {
-    pl_b = params;
-    for (m = 0; m < (comp-1); m++) pl_b = pl_b->next;
-    pl_b->next = pl->next;
-  }
-  free(pl);
-  return pl_b->next;
 }
 
 void calc_weights(double *weights, double *priors,
