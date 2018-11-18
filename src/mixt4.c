@@ -1,3 +1,6 @@
+/* C implemantation of Figueiredo, Mario A. T., and Anil K. Jain. "Unsupervised learning of finite mixture models." IEEE Transactions on pattern analysis and machine intelligence 24.3 (2002): 381-396.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>
@@ -25,6 +28,7 @@ double loglik_mvGMM(double *data, int n, int p,
                     double *Mus, double *weights, double *priors,
                     int *lives, int K, int Kmax);
 
+// main
 void mixtures(double *data, double *weights, double *Mus,
               double *Covs, double *priors, int *pn,
               int *pp, double *pdmover2, int *pK,
@@ -33,8 +37,6 @@ void mixtures(double *data, double *weights, double *Mus,
               int *kappas, int *trans1, int *trans2,
               int *lives, double *bMus, double *bCovs,
               double *bpriors, int *pitmax, int *pverbose)
-// weights is n x K matrix of likelihood * priors
-// dmover2 : p(p+3)/2
 {
   int j, k, l, m, comp, min_m, countf;
   int n = *pn, p = *pp, K = *pK, Kmax = *pK,
