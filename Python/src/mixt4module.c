@@ -1,4 +1,5 @@
 #include <Python.h>
+#include <numpy/arrayobject.h>
 
 extern void mixtures(double *data, double *weights, double *Mus,
                      double *Covs, double *priors, int *pn,
@@ -12,17 +13,17 @@ extern void mixtures(double *data, double *weights, double *Mus,
 static PyObject* Py_call_mixtures(PyObject *self, PyObject *args) {
   PyArrayObject *data, *weights, *Mus, *Covs, *priors,
     *kappas, *trans1, *trans2, *lives, *logliks, *bMus, *bCovs, *bpriors;
-  int *pn, *pp, *pK, *pKmin, *pcountf, *pitmax, *pverbose;
-  double *pdmover2, *ptol, *pmindl, *dl;
+  int pn, pp, pK, pKmin, pcountf, pitmax, pverbose;
+  double pdmover2, ptol, pmindl, dl;
 
   if (!PyArg_ParseTuple(args,
                         "OOOOOiidiiddidOOOOOOOOii",
                         &data, &weights, &Mus, &Covs,
-                        &priors, pn, pp, pdmover2, pK,
-                        pKmin, ptol, pmindl, pcountf, dl,
+                        &priors, &pn, &pp, &pdmover2, &pK,
+                        &pKmin, &ptol, &pmindl, &pcountf, &dl,
                         &logliks, &kappas, &trans1, &trans2,
-                        &lives, &bMus, &bCovs, &bpriors, pitmax,
-                        pverbose
+                        &lives, &bMus, &bCovs, &bpriors, &pitmax,
+                        &pverbose
                         ))
     return NULL;
 
@@ -31,15 +32,15 @@ static PyObject* Py_call_mixtures(PyObject *self, PyObject *args) {
            (double *)Mus->data,
            (double *)Covs->data,
            (double *)priors->data,
-           pn,
-           pp,
-           pdmover2,
-           pK,
-           pKmin,
-           ptol,
-           pmindl,
-           pcountf,
-           dl,
+           &pn,
+           &pp,
+           &pdmover2,
+           &pK,
+           &pKmin,
+           &ptol,
+           &pmindl,
+           &pcountf,
+           &dl,
            (double *)logliks->data,
            (int *)kappas->data,
            (int *)trans1->data,
@@ -48,10 +49,10 @@ static PyObject* Py_call_mixtures(PyObject *self, PyObject *args) {
            (double *)bMus->data,
            (double *)bCovs->data,
            (double *)bpriors->data,
-           pitmax,
-           pverbose);
+           &pitmax,
+           &pverbose);
 
-  return Py_BuildValue(""); //何かしら返す必要があるので。無いとsegmentation fault
+  return Py_BuildValue(""); // if no exist, cause segmentation fault.
 }
 
 static PyMethodDef MixturesMethods[] =
