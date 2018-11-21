@@ -15,7 +15,7 @@ int choldc(double **a, double *p, int n);
 int update_L(double *cov, int comp, int p);
 void init_params(double *Covs, int Kmax, int p);
 void free_params(int M, int p);
-double* estep_fullcov(double *posts, int n, int K, int Kmax);
+double* estep_fullcov(double *weights, int n, int K, int Kmax);
 double mstep_fullcov(double *data, int n, int p, int comp,
                      double *mu, double *cov, double *post,
                      int Kmax);
@@ -208,10 +208,19 @@ void mixtures(double *data, double *weights, double *Mus,
 
   *pcountf = countf;
   free_params(Kmax, p);
+  free(mapp);
 }
 
 
 double mvnorm(double *xi, double *mu, int index, int p)
+/*
+  Calculate loglikelihood of multivariate normal distribution
+
+  xi: ith p-dimensional data vector
+  mu: the p-dimensional mean vector of the the 'index'th component
+  index: specify the 'index'th component
+  p: the number of dim
+ */
 {
   int i, j;
   double tmp;
@@ -242,12 +251,12 @@ int choldc(double **a, double *p, int n)
     for (j = 0; j < n; j++) {
       for (sum = a[i][j], k = i-1; k >= 0; k--) sum -= a[i][k] * a[j][k];
       if (i == j) {
-	if (sum <= 0) {
-	  return -1;
-	}
-	p[i] = sqrt(sum);
+        if (sum <= 0) {
+          return -1;
+        }
+        p[i] = sqrt(sum);
       } else {
-	a[j][i] = sum / p[i];
+        a[j][i] = sum / p[i];
       }
     }
   }
@@ -334,18 +343,19 @@ void free_params(int M, int p)
   free(L);free(diagL);
 }
 
-double* estep_fullcov(double *posts, int n, int K, int Kmax)
+double* estep_fullcov(double *weights, int n, int K, int Kmax)
 /* calculate posterior probabilities*/
 {
   int i,k;
   double s;
+  double *posts = weights;
 
   for (i = 0; i < n; i++) {
     s = 0.0;
     for (k = 0; k < K; k++)
-      s += posts[i*Kmax + k];
+      s += weights[i*Kmax + k];
     for (k = 0; k < K; k++)
-      posts[i*Kmax + k] = posts[i*Kmax + k] / s;
+      posts[i*Kmax + k] = weights[i*Kmax + k] / s;
   }
 
   return posts;
@@ -400,21 +410,21 @@ double mstep_fullcov(double *data, int n, int p,
   return sum;
 }
 
-void lshift_vec(double *vec, int comp, int K)
+void lshift_vec(double *vec, int id, int K)
 {
   int m;
 
-  for (m = comp; m < K-1; m++)
+  for (m = id; m < K-1; m++)
     vec[m] = vec[m+1];
   vec[m] = 0;
 }
 
-void lshift_mat(double *mat, int comp, int n, int K, int Kmax)
+void lshift_mat(double *mat, int id, int n, int K, int Kmax)
 {
   int i, m;
 
   for (i = 0; i < n; i++ ) {
-    for (m = comp; m < K-1; m++)
+    for (m = id; m < K-1; m++)
       mat[i*Kmax + m] = mat[i*Kmax + m+1];
     mat[i*Kmax + m] = 0;
   }
@@ -425,10 +435,10 @@ void calc_weights(double *weights, double *priors,
                   double *data, int n, int p, int K, int Kmax)
 {
   int i, m;
-  int k = 0;
+  int k = -1;
 
   for (m = 0; m < K; m++) {
-    for (; lives[k]==0; k++);
+    for (k=k+1; lives[k]==0; k++);
     for (i = 0; i < n; i++)
       weights[i*Kmax+m] = priors[m] * exp(mvnorm(&data[i*p], &Mus[k*p], k, p));
   }
@@ -440,14 +450,14 @@ double loglik_mvGMM(double *data, int n, int p,
 // return sum of multivariate normal loglikehood
 {
   int i, m;
-  int k = 0;
+  int k = -1;
   double sum, llik, w;
   double loglik = 0.0;
 
   for (i = 0; i < n; i++) {
     sum = 0.0;
     for (m = 0; m < K; m++) {
-      for (; lives[k]==0; k++);
+      for (k=k+1; lives[k]==0; k++);
       llik = mvnorm(&data[i*p], &Mus[k*p], k, p);
       w =  priors[m] * exp(llik);
       weights[i*Kmax + m] = w;
