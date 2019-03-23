@@ -38,7 +38,7 @@ void mixtures(double *data, double *weights, double *Mus,
               int *lives, double *bMus, double *bCovs,
               double *bpriors, int *pitmax, int *pverbose)
 {
-  int j, k, l, m, comp, min_m, countf;
+  int i, j, k, l, m, comp, min_m, countf;
   int n = *pn, p = *pp, K = *pK, Kmax = *pK,
     Kmin = *pKmin, itmax = *pitmax, verbose = *pverbose;
   double *posts, *mu, *cov;
@@ -53,10 +53,30 @@ void mixtures(double *data, double *weights, double *Mus,
   //========debug=======//
 
   mapp = (int *)malloc(Kmax * sizeof(int));
-  for (k = 0; k < Kmax; k++) mapp[k] = k;
+  for (k = 0; k < Kmax; k++)
+    mapp[k] = k;
 
   // make variables for calculating likelihood
   init_params(Covs, Kmax, p);
+
+  comp = mapp[0];
+  mu = &Mus[p*comp];
+  cov = &Covs[comp*p*p];
+
+  printf("0th mu\n");
+  for (i = 0; i < p; i++) {
+    printf("%.3f ", mu[i]);
+  }
+  printf("\n");
+
+  printf("0th cov\n");
+  for (i = 0; i < p; i++) {
+    for (j = 0; j < p; j++)
+      printf("%.3f ", cov[j + i*p]);
+  }
+  printf("\n");
+
+  posts = estep_fullcov(weights, n, K, Kmax);
 
   k_cont = 1;
   countf = 0;
@@ -66,7 +86,9 @@ void mixtures(double *data, double *weights, double *Mus,
   while(k_cont) {
     do {
       idx = 0;
+      printf("%d %d %d start\n", K, idx, K > idx);
       while (idx < K) {
+        printf("%d ", idx);
         comp = mapp[idx];
 
         // load mean and covariance of "comp"th component
@@ -119,6 +141,7 @@ void mixtures(double *data, double *weights, double *Mus,
         }
       } //while(idx < K)
       countf++;
+      printf(" %3d done while\n", countf);
 
       // calc posterior for MML
       loglik = loglik_mvGMM(data, n, p, Mus, weights, priors, lives, K, Kmax);
