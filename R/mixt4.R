@@ -45,7 +45,7 @@ mixtures4 <- function(X,Kmax,Kmin=1,itmax=500,th=1e-4,silent=0) {
               kappas = as.integer(kappas),
               trans1 = integer(itmax),
               trans2 = integer(itmax),
-              lives = integer(Kmax),
+              blives = as.integer(rep(1, Kmax)),
               bMus = double(Kmax*p),
               bCovs = double(Kmax*p*p),
               bpriors = double(Kmax),
@@ -58,12 +58,12 @@ mixtures4 <- function(X,Kmax,Kmin=1,itmax=500,th=1e-4,silent=0) {
     kappas <- ret$kappas[1:countf]
     trans1 <- which(ret$trans1 == 1)
     trans2 <- which(ret$trans2 == 1)
-    lives <- ret$lives == 1
+    blives <- ret$blives == 1
     Mus <- matrix(ret$bMus,Kmax,p,byrow=T)
     Covs <- array(ret$bCovs,c(p,p,Kmax))
-    priors <- ret$bpriors[1:sum(lives)]
-    Covs <- Covs[,,lives]
-    Mus <- Mus[lives,]
+    priors <- ret$bpriors[blives]
+    Covs <- Covs[,,blives,drop=F]
+    Mus <- Mus[blives,,drop=F]
     loglikmat <- log(priors) + t(mvnorm(X,Mus,Covs))
     weights <- exp(loglikmat)
     posteriors <- apply(weights,2,function(x) x/sum(x))
@@ -71,7 +71,7 @@ mixtures4 <- function(X,Kmax,Kmin=1,itmax=500,th=1e-4,silent=0) {
         posteriors <- matrix(posteriors,1,length(posteriors))
     clusters <- apply(posteriors,2,which.max)
 
-    list(posteriors=posteriors,clusters=clusters,nc=sum(lives),Mus=Mus,Covs=Covs,priors=priors,dl=dl,logliks=logliks,kappas=kappas,trans1=trans1,trans2=trans2)
+    list(posteriors=posteriors,clusters=clusters,nc=sum(blives),Mus=Mus,Covs=Covs,priors=priors,dl=dl,logliks=logliks,kappas=kappas,trans1=trans1,trans2=trans2)
 }
 
 gmmEM <- function(X,Kmax,silent=0,itmax=500,th=1e-4) {
@@ -167,4 +167,4 @@ mvnorm <- function(X,Mus,Covs) {
     ret
 }
 
-dyn.load("./mixt4.dll")
+dyn.load("./mixt4.so")
