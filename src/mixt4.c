@@ -35,10 +35,10 @@ void mixtures(double *data, double *weights, double *Mus,
               int *pKmin, double *ptol, double *pmindl,
               int *pcountf, double *dl, double *logliks,
               int *kappas, int *trans1, int *trans2,
-              int *lives, double *bMus, double *bCovs,
+              int *blives, double *bMus, double *bCovs,
               double *bpriors, int *pitmax, int *pverbose)
 {
-  int i, j, k, l, m, comp, min_m, countf;
+  int j, k, l, m, comp, min_m, countf;
   int n = *pn, p = *pp, K = *pK, Kmax = *pK,
     Kmin = *pKmin, itmax = *pitmax, verbose = *pverbose;
   double *posts, *mu, *cov;
@@ -46,37 +46,21 @@ void mixtures(double *data, double *weights, double *Mus,
   double mindl = *pmindl, loglik;
   double dmover2 = *pdmover2, tol = *ptol;
   int k_cont, killed;
-  int *mapp, idx;
+  int *mapp, *lives, idx;
 
   //========debug=======//
   // print_debug(priors,weights,n,p,K);
   //========debug=======//
 
   mapp = (int *)malloc(Kmax * sizeof(int));
-  for (k = 0; k < Kmax; k++)
+  lives = (int *)malloc(Kmax * sizeof(int));
+  for (k = 0; k < Kmax; k++) {
     mapp[k] = k;
+    lives[k] = 1;
+  }
 
   // make variables for calculating likelihood
   init_params(Covs, Kmax, p);
-
-  comp = mapp[0];
-  mu = &Mus[p*comp];
-  cov = &Covs[comp*p*p];
-
-  printf("0th mu\n");
-  for (i = 0; i < p; i++) {
-    printf("%.3f ", mu[i]);
-  }
-  printf("\n");
-
-  printf("0th cov\n");
-  for (i = 0; i < p; i++) {
-    for (j = 0; j < p; j++)
-      printf("%.3f ", cov[j + i*p]);
-  }
-  printf("\n");
-
-  posts = estep_fullcov(weights, n, K, Kmax);
 
   k_cont = 1;
   countf = 0;
@@ -86,9 +70,7 @@ void mixtures(double *data, double *weights, double *Mus,
   while(k_cont) {
     do {
       idx = 0;
-      printf("%d %d %d start\n", K, idx, K > idx);
       while (idx < K) {
-        printf("%d ", idx);
         comp = mapp[idx];
 
         // load mean and covariance of "comp"th component
@@ -141,10 +123,10 @@ void mixtures(double *data, double *weights, double *Mus,
         }
       } //while(idx < K)
       countf++;
-      printf(" %3d done while\n", countf);
 
       // calc posterior for MML
       loglik = loglik_mvGMM(data, n, p, Mus, weights, priors, lives, K, Kmax);
+
       // save
       logliks[countf] = loglik;
       if (verbose != 0)
@@ -166,6 +148,7 @@ void mixtures(double *data, double *weights, double *Mus,
       mindl = dl[countf];
       for (m = 0; m < Kmax; m++) {
         bpriors[m] = priors[m];
+        blives[m] = lives[m];
         for (j = 0; j < p; j++) {
           bMus[m*p + j] = Mus[m*p + j];
           for (l = 0; l < p; l++)
@@ -473,12 +456,13 @@ double loglik_mvGMM(double *data, int n, int p,
 // return sum of multivariate normal loglikehood
 {
   int i, m;
-  int k = -1;
+  int k;
   double sum, llik, w;
   double loglik = 0.0;
 
   for (i = 0; i < n; i++) {
     sum = 0.0;
+    k = -1;
     for (m = 0; m < K; m++) {
       for (k=k+1; lives[k]==0; k++);
       llik = mvnorm(&data[i*p], &Mus[k*p], k, p);
