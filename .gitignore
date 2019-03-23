@@ -181,6 +181,11 @@ pip-selfcheck.json
 
 ### others ##
 *.dll
+*.o
+
+### R ##
+*.RData
+*.Rhistory
 
 # End of https://www.gitignore.io/api/emacs,python
 
