@@ -1,6 +1,7 @@
 from mixtures import mmlem
 
 from sklearn.datasets import make_classification
+import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
@@ -50,10 +51,10 @@ def fit(data, Kmax=5, Kmin=1, itmax=500, th=1e-4, verpose=0):
     dl = np.zeros(itmax)
     logliks = np.zeros(itmax)
     kappas = np.zeros(itmax)
-    countf = np.int(0)
-    trans1 = np.zeros(itmax, dtype=np.int)
-    trans2 = np.zeros(itmax, dtype=np.int)
-    blives = np.ones(Kmax, dtype=np.int)
+    countf = np.int32(0)
+    trans1 = np.zeros(itmax, dtype=np.int32)
+    trans2 = np.zeros(itmax, dtype=np.int32)
+    blives = np.ones(Kmax, dtype=np.int32)
     bMus = np.zeros(Kmax * p)
     bCovs = np.zeros(Kmax * p * p)
     bpriors = np.zeros(Kmax)
@@ -64,6 +65,12 @@ def fit(data, Kmax=5, Kmin=1, itmax=500, th=1e-4, verpose=0):
     mmlem(X, weights, Mus, Covs, priors, n, p, dm / 2, Kmax, Kmin, th, mindl,
           countf, dl, logliks, kappas, trans1, trans2, blives, bMus, bCovs,
           bpriors, itmax, 1)
+
+    bMus = bMus.reshape(Kmax, p)
+    bCovs = bCovs.reshape(Kmax, p, p)
+    Mus = bMus[blives == 1, :]
+    Covs = bCovs[blives == 1, :, :]
+    priors = bpriors[blives == 1]
 
 
 if __name__ == "__main__":
@@ -82,6 +89,6 @@ if __name__ == "__main__":
         shift=0,
         scale=1.0,
         shuffle=True,
-        random_state=1)
+        random_state=23)
     data = pd.DataFrame(X[0], X[1])
     fit(data)
